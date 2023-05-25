@@ -1,56 +1,252 @@
+# Copyright (C) 2012-2023 Zammad Foundation, https://zammad-foundation.org/
+
 source 'https://rubygems.org'
-git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
+# core - base
 ruby '3.1.2'
-
-# Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '~> 6.1.0'
-# Use sqlite3 as the database for Active Record
-gem 'sqlite3', '~> 1.4'
-# Use Puma as the app server
-gem 'puma', '~> 5.0'
-# Use SCSS for stylesheets
-gem 'sass-rails', '>= 6'
-# Transpile app-like JavaScript. Read more: https://github.com/rails/webpacker
-gem 'webpacker', '~> 5.0'
-# Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
-gem 'turbolinks', '~> 5'
-# Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
-gem 'jbuilder', '~> 2.7'
-# Use Redis adapter to run Action Cable in production
-# gem 'redis', '~> 4.0'
-# Use Active Model has_secure_password
-# gem 'bcrypt', '~> 3.1.7'
 
-# Use Active Storage variant
-# gem 'image_processing', '~> 1.2'
+# TEMPORARY Security updates from Ruby 3.1.4. Can be removed when updating from Ruby 3.1.3 to a higher version.
+# See also: https://www.ruby-lang.org/en/news/2023/03/30/ruby-3-1-4-released/
+gem 'time', '>= 0.2.2'
+gem 'uri', '>= 0.12.1'
+# END TEMPORARY
 
-# Reduces boot times through caching; required in config/boot.rb
-gem 'bootsnap', '>= 1.4.4', require: false
+# core - rails additions
+gem 'activerecord-import'
+gem 'activerecord-session_store'
+gem 'bootsnap', require: false
+gem 'composite_primary_keys'
+gem 'json'
 
+# core - application servers
+gem 'puma', group: :puma
+
+# core - supported ORMs
+gem 'activerecord-nulldb-adapter', group: :nulldb
+gem 'mysql2', group: :mysql
+gem 'pg', '~> 1.2.0', group: :postgres
+
+# core - asynchrous task execution
+gem 'daemons'
+gem 'delayed_job_active_record'
+
+# core - command line interface
+gem 'thor'
+
+# core - websocket
+gem 'em-websocket'
+gem 'eventmachine'
+gem 'hiredis'
+# version restriction from actioncable-6.1.6.1/lib/action_cable/subscription_adapter/redis.rb
+#   - check after rails update
+gem 'redis', '>= 3', '< 5'
+
+# core - password security
+gem 'argon2'
+
+# core - state machine
+gem 'aasm'
+
+# core - authorization
+gem 'pundit'
+
+# core - graphql handling
+gem 'graphql'
+gem 'graphql-batch', require: 'graphql/batch'
+
+# core - image processing
+gem 'rszr'
+
+# core - use same timezone data on any host
+gem 'tzinfo-data'
+
+# performance - Memcached
+gem 'dalli', require: false
+
+# Vite is required by the web server
+gem 'vite_rails'
+
+# Only load gems for asset compilation if they are needed to avoid
+#   having unneeded runtime dependencies like NodeJS.
+group :assets do
+  # asset handling - javascript execution for e.g. linux
+  gem 'execjs', require: false
+
+  # asset handling - coffee-script
+  gem 'coffee-rails', require: false
+
+  # asset handling - frontend templating
+  gem 'eco', require: false
+
+  # asset handling - SASS
+  gem 'sassc-rails', require: false
+
+  # asset handling - pipeline
+  gem 'sprockets', '~> 3.7.2', require: false
+  gem 'terser', require: false
+
+  gem 'autoprefixer-rails', require: false
+end
+
+# authentication - provider
+gem 'doorkeeper'
+gem 'oauth2'
+
+# authentication - two factor
+gem 'rotp', require: false
+
+# authentication - third party
+gem 'omniauth-rails_csrf_protection'
+
+# authentication - third party providers
+gem 'omniauth-facebook'
+gem 'omniauth-github'
+gem 'omniauth-gitlab'
+gem 'omniauth-google-oauth2'
+gem 'omniauth-linkedin-oauth2'
+gem 'omniauth-microsoft-office365'
+gem 'omniauth-saml'
+gem 'omniauth-twitter'
+gem 'omniauth-weibo-oauth2', git: 'https://github.com/zammad-deps/omniauth-weibo-oauth2', branch: 'unpin-dependencies'
+
+# Rate limiting
+gem 'rack-attack'
+
+# channels
+gem 'gmail_xoauth'
+gem 'koala'
+gem 'telegram-bot-ruby'
+gem 'twitter'
+
+# channels - email additions
+gem 'email_address'
+gem 'htmlentities'
+gem 'mail'
+gem 'mime-types'
+gem 'rchardet', '>= 1.8.0'
+
+# networking libraries were removed from stdlib in ruby 3.1..
+gem 'net-ftp',  require: false
+gem 'net-http', require: false
+gem 'net-imap', require: false
+gem 'net-pop',  require: false
+gem 'net-smtp', require: false
+
+# convert from punycode ACE strings to unicode UTF-8 strings and visa versa
+gem 'simpleidn'
+
+# feature - business hours
+gem 'biz'
+
+# feature - signature diffing
+gem 'diffy'
+
+# feature - excel output
+gem 'write_xlsx', require: false
+
+# feature - csv import/export
+gem 'csv', require: false
+
+# feature - device logging
+gem 'browser'
+
+# feature - iCal export
+gem 'icalendar'
+gem 'icalendar-recurrence'
+
+# feature - phone number formatting
+gem 'telephone_number'
+
+# feature - SMS
+gem 'messagebird-rest'
+gem 'twilio-ruby', require: false
+
+# feature - ordering
+gem 'acts_as_list'
+
+# integrations
+gem 'clearbit', require: false
+gem 'net-ldap'
+gem 'slack-notifier', require: false
+gem 'zendesk_api', require: false
+
+# integrations - exchange
+gem 'autodiscover', git: 'https://github.com/zammad-deps/autodiscover', require: false
+gem 'viewpoint', require: false
+
+# integrations - S/MIME
+gem 'openssl'
+
+# Translation sync
+gem 'byk', require: false
+gem 'PoParser', require: false
+
+# Gems used only for develop/test and not required
+# in production environments by default.
 group :development, :test do
-  # Call 'byebug' anywhere in the code to stop execution and get a debugger console
-  gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
-end
 
-group :development do
-  # Access an interactive console on exception pages or by calling 'console' anywhere in the code.
-  gem 'web-console', '>= 4.1.0'
-  # Display performance information such as SQL time and flame graphs for each request in your browser.
-  # Can be configured to work on production as well see: https://github.com/MiniProfiler/rack-mini-profiler/blob/master/README.md
-  gem 'rack-mini-profiler', '~> 2.0'
-  gem 'listen', '~> 3.3'
-  # Spring speeds up development by keeping your application running in the background. Read more: https://github.com/rails/spring
-  gem 'spring'
-end
+  # watch file changes
+  gem 'listen'
 
-group :test do
-  # Adds support for Capybara system testing and selenium driver
-  gem 'capybara', '>= 3.26'
+  # debugging
+  gem 'byebug'
+  gem 'pry-rails'
+  gem 'pry-remote'
+  gem 'pry-rescue'
+  gem 'pry-stack_explorer'
+
+  # test frameworks
+  gem 'minitest-profile', require: false
+  gem 'rails-controller-testing'
+  gem 'rspec-rails'
+  gem 'rspec-retry'
+  gem 'shoulda-matchers'
+  gem 'test-unit'
+
+  # for testing Pundit authorisation policies in RSpec
+  gem 'pundit-matchers'
+
+  # UI tests w/ Selenium
+  gem 'capybara'
   gem 'selenium-webdriver'
-  # Easy installation and use of web drivers to run system tests with browsers
-  gem 'webdrivers'
+
+  # code QA
+  gem 'brakeman', require: false
+  gem 'overcommit'
+  gem 'rubocop'
+  gem 'rubocop-faker'
+  gem 'rubocop-graphql'
+  gem 'rubocop-inflector'
+  gem 'rubocop-performance'
+  gem 'rubocop-rails'
+  gem 'rubocop-rspec'
+
+  # generate random test data
+  gem 'factory_bot_rails'
+  gem 'faker'
+
+  # mock http calls
+  gem 'webmock'
+
+  # record and replay TCP/HTTP transactions
+  gem 'tcr', require: false
+  gem 'vcr', require: false
+
+  # handle deprecations in core and addons
+  gem 'deprecation_toolkit'
+
+  # image comparison in tests
+  gem 'chunky_png'
+
+  # refresh ENVs in CI environment
+  gem 'dotenv', require: false
+
+  # Slack helper for testing
+  gem 'slack-ruby-client', require: false
 end
 
-# Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw, :jruby]
+# To permanently extend Zammad with additional gems, you can specify them in Gemfile.local.
+Dir['Gemfile.local*'].each do |file|
+  eval_gemfile file
+end
