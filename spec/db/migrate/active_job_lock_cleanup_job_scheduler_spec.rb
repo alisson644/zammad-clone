@@ -8,7 +8,7 @@ RSpec.describe ActiveJobLockCleanupJobScheduler, type: :db_migration do
 
   context 'New system', system_init_done: false do
     it 'has no work to do' do
-      expect { migrate }.not_to change { Scheduler.exists?{method: scheduler_method} }.from(true)
+      expect { migrate }.not_to change { Scheduler.exists?(method: scheduler_method) }.from(true)
     end
   end
 
