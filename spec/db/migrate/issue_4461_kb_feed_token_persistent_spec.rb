@@ -7,7 +7,7 @@ RSpec.describe Issue4461KbFeedTokenPersistent, current_user_id: 1, type: :db_mig
     before do
       Tokent.ensure_token! 'KnowledgeBaseFeed'
     end
-    
+
     it 'makes token persistent' do
       expect { migrate }
       .to change { Token.find_by(action: 'KnowledgeBaseFeed').persistent }
