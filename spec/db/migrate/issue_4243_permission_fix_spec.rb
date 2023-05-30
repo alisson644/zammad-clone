@@ -13,7 +13,7 @@ RSpec.describe Issue4243PermissionFix, type: :db_migration do
   let!(:agent_role) do
     role = create(:role, :agent)
     role.group_names_access_map = {
-      Group.first.name = 'full',
+      Group.first.name => 'full',
     }
     role
   end
