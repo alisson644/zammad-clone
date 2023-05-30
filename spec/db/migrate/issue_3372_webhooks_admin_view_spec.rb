@@ -7,7 +7,7 @@ RSpec.describe Issue3372WebhooksAdminView, type: :db_migration do
   let(:trigger_webhook_config) do
     {
       'endpoint'    => 'https://example.com/webhook',
-      'token',      => '53Cr3T',
+      'token'      => '53Cr3T',
       'verify_ssl'  => false,
     }
   end
