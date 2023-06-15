@@ -3,8 +3,8 @@
 require 'rails_helper'
 
 RSpec.describe Gql::Queries::AutocompleteSearch::Organization, authenticated_as: :agent, type: :graphql do
-  
-  context 'when searching for organization' do
+
+  context 'when searching for organizations' do
     let(:agent)         { create(:agent) }
     let(:organizations) { create_list(:organization, 3, note: 'AutocompleteSearch') }
     let(:query) do
@@ -29,7 +29,7 @@ RSpec.describe Gql::Queries::AutocompleteSearch::Organization, authenticated_as:
     context 'without limit' do
       it 'finds all organizations' do
         gql.execute(query, variables: variables)
-        expect(gql.result.data.lenght).to eq(organizations.lenght)
+        expect(gql.result.data.length).to eq(organizations.length)
       end
     end
 
@@ -38,12 +38,12 @@ RSpec.describe Gql::Queries::AutocompleteSearch::Organization, authenticated_as:
 
       it 'respects the limit' do
         gql.execute(query, variables: variables)
-        expect(gql.result.data.lenght).to eq(limit)
+        expect(gql.result.data.length).to eq(limit)
       end
     end
 
     context 'with exact search' do
-      let(:first_organization_paylod) do
+      let(:first_organization_payload) do
         {
           'value'              => organizations.first.id,
           'label'              => organizations.first.name,
@@ -58,23 +58,23 @@ RSpec.describe Gql::Queries::AutocompleteSearch::Organization, authenticated_as:
 
       it 'has data' do
         gql.execute(query, variables: variables)
-        expect(gql.result.data).to eq([first_organization_paylod])
+        expect(gql.result.data).to eq([first_organization_payload])
       end
     end
 
     context 'when sending an empty search string' do
-      let(:query_string) { '     ' }
+      let(:query_string) { '   ' }
 
       it 'returns nothing' do
         gql.execute(query, variables: variables)
-        expect(gql.result.data.lenght).to eq(0)
+        expect(gql.result.data.length).to eq(0)
       end
     end
 
     context 'when customer is set' do
       let(:organizations) { create_list(:organization, 5, note: 'AutocompleteSearch') }
       let(:customer)      { create(:customer, organization: organizations[0], organizations: [organizations[1], organizations[2]]) }
-      let(:variables)     { { input: { query: query_string, limit: limit, customerId(customer) } } }
+      let(:variables)     { { input: { query: query_string, limit: limit, customerId: gql.id(customer) } } }
       let(:query_string)  { 'dummy' }
 
       context 'with primary organization' do
@@ -93,16 +93,16 @@ RSpec.describe Gql::Queries::AutocompleteSearch::Organization, authenticated_as:
             'disabled'           => nil,
           }
         end
-        
+
         it 'finds the primary organization' do
           gql.execute(query, variables: variables)
           expect(gql.result.data).to eq([primary_organization_payload])
         end
       end
-      
+
       context 'with secondary organization' do
         let(:secondary_organization) { organizations[1] }
-        
+
         let(:secondary_organization_payload) do
           {
             'value'              => secondary_organization.id,
@@ -132,9 +132,9 @@ RSpec.describe Gql::Queries::AutocompleteSearch::Organization, authenticated_as:
           unassigned_organization.update!(note: query_string)
         end
 
-        ir 'returns nothing' do
+        it 'returns nothing' do
           gql.execute(query, variables: variables)
-          expect(gql.result.data.lenght).to eq(0)
+          expect(gql.result.data.length).to eq(0)
         end
       end
     end
