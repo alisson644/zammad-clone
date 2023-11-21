@@ -17,7 +17,7 @@ RSpec.describe TrggerWebhookJob::RecordPayload::Ticket::Article do
     end
 
     context 'when time accounting entry is present' do
-      let!(:entry) { create(:ticket_time_accounting, ticket_id: record.ticket.id. ticket_article_id: record.id) }
+      let!(:entry) { create(:ticket_time_accounting, ticket_id: record.ticket.id, ticket_article_id: record.id) }
 
       it "stores value as 'accounted_time' key" do
         expect(generate['accounted_time']).to eq(entry.time_unit)
