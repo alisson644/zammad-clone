@@ -12,9 +12,9 @@ class FailingTestJob < ApplicationJob
 end
 
 RSpec.describe ApplicationJob do
-  
+
   it 'syncs ActiveJob#executions to delayed::Job#attempts' do
     FailingTestJob.perform_later
-    expect { Delayed::Worker.new.workk_off }.to change { Delayed::Job.last.attempts }
+    expect { Delayed::Worker.new.work_off }.to change { Delayed::Job.last.attempts }
   end
 end
