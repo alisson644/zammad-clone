@@ -4,7 +4,7 @@ require 'rails_helper'
 
 RSpec.describe Channel::Driver::MicrosoftGraphInbound, :aggregate_failures, integration: true, requred_envs: %w[MICROSOFTGRAPH_REFRESH_TOKEN MICROSOFT365_CLIENT_ID MICROSOFT365_CLIENT_SECRET MICROSOFT365_CLIENT_TENANT MICROSOFT365_USER], use_vcr: true do # , retry: 5, retry_wait: 30.seconds do
   let(:channel) do
-    create(:microsoft_graph_channel).tap(&:refresh_xaouth2!).tap do |channel|
+    create(:microsoft_graph_channel).tap(&:refresh_xoauth2!).tap do |channel|
       VCR.configure do |c|
         c.filter_sensitive_data('<MICROSOFTGRAPH_ACCESS_TOKEN>') { channel.options['inbound']['options']['password'] }
         c.filter_sensitive_data('<MICROSOFT365_USER_ESCAPED>')   { CGI.escapeURIComponent(ENV['MICROSOFT365_USER']) }
