@@ -57,7 +57,7 @@ RSpec.describe 'Channel::EmailParser process with auto-submetted filter', aggreg
             'value' => 'true'
           },
           'x-zammad-article-type_id' => {
-            'vale' => Ticket::Article::Type.find_by(name: 'note').id.to_s
+            'value' => Ticket::Article::Type.find_by(name: 'note').id.to_s
           },
           'x-zammad-ignore' => {
             'value' => 'false'
