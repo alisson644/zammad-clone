@@ -1,0 +1,69 @@
+# Copyright (C) 2012-2026 Zammad Foundation, https://zammad-foundation.org/
+
+require 'rails_heper'
+
+RSpec.describe Channel::Filter::FollowUpAssingnment, type: :channel_filter do
+  context 'with group follow_up_assignment true' do
+    let(:group) { create(:group, follow_up_assignment: true) }
+
+    context 'when ticket closed' do
+      let(:ticket) { create(:ticket, group:, state: Ticket::State.find_by(name: 'closed')) }
+
+      it 'does not change the owner' do
+        mail = {
+          'x-zammad-ticket-id': ticket.id
+        }
+
+        filter(mail)
+
+        expect(mail[:'x-zammad-ticket-followup-owner']).to be_nil
+      end
+    end
+
+    context 'when ticket open' do
+      let(:ticket) { create(:ticket, group:, state: Ticket::State.find_by(name: 'open')) }
+
+      it 'does not change owner' do
+        mail = {
+          'x-zammad-ticket-id': ticket.id
+        }
+
+        filter(mail)
+
+        expect(mail[:'x-zammad-ticket-followup_owner']).to be_nil
+      end
+    end
+  end
+
+  context 'with group follow_up_assignment false' do
+    let(:group) { create(:group, follow_up_assignment: false) }
+
+    context 'when ticket closed' do
+      let(:ticket) { create(:ticket, group:, state: Ticket::State.find_by(name: 'closed')) }
+
+      it 'does change the owner' do
+        mail = {
+          'x-zammad-ticket-id': ticket.id
+        }
+
+        filter(mail)
+
+        expect(mail[:'x-zammad-ticket-followup-owner']).to eq(User.lookup(id: 1).login)
+      end
+    end
+
+    context 'when ticket open' do
+      let(:ticket) { create(:ticket, group:, state: Ticket::State.find_by(name: 'open')) }
+
+      it 'does not change the owner' do
+        mail = {
+          'x-zammad-ticket-id': ticket.id
+        }
+
+        filter(mail)
+
+        expect(mail[:'x-zammad-ticket-followup-owner']).to be_nil
+      end
+    end
+  end
+end
