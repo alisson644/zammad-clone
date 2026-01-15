@@ -58,7 +58,7 @@ RSpec.describe Channel::Filter::ReplyToBasedSender, type: :channe_filter do
 
       it 'sets from to reply-to realname and address' do
         expect { filter(mail_hash) }
-          .to change { mail_has[:from] }.to('Bugs Bunny <nugs.bunny@acme.corp>')
+          .to change { mail_hash[:from] }.to('Bugs Bunny <nugs.bunny@acme.corp>')
       end
     end
 
