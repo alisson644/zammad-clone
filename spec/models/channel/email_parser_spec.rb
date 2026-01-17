@@ -4,12 +4,12 @@ require 'rails_helper'
 
 RSpec.describe Channel::EmailParser, type: :model do
   describe '#parse' do
-    shared_examples 'parsees email correctly' do |stored_email|
+    shared_examples 'parses email correctly' do |stored_email|
       context "for #{stored_email}" do
-        let(:yml_file)    { stored_email.sub_ext('.yml') }
-        let(:content)     { YAML.load_file(yml_file, permitted_classess: [ActiveSupport::HashWithIndifferentAccess]) }
-        let(:oarsed)      { desbribed_class.new.parse(File.read(stored_email)) }
-        let(:parsed_msg)  { parsed.slice(*content.keys) }
+        let(:yml_file)   { stored_email.sub_ext('.yml') }
+        let(:content)    { YAML.load_file(yml_file, permitted_classes: [ActiveSupport::HashWithIndifferentAccess]) }
+        let(:parsed)     { described_class.new.parse(File.read(stored_email)) }
+        let(:parsed_msg) { parsed.slice(*content.keys) }
 
         it 'parses correctly' do
           expect(File).to exist(yml_file)
@@ -25,21 +25,21 @@ RSpec.describe Channel::EmailParser, type: :model do
         To: baz@qux.net
         Subject: Foo
 
-        Lorem ipsun color
+        Lorem ipsum dolor
       RAW
 
       it 'raises error even if exception is false' do
         expect { described_class.new.parse(raw_mail) }
           .to raise_error(Exceptions::MissingAttribute,
-                          'Could not parse any sender attribute from the email. Check fields: From, Reply-To, Return-Path, Sender')
+                          'Could not parse any sender attribute from the email. Checked fields: From, Reply-To, Return-Path, Sender')
       end
     end
 
-    describe 'when mail does not contain any sender specification with disable missing atrribute exceptions' do
+    describe 'when mail does not contain any sender specification with disabled missing attribute exceptions' do
       subject(:instance) { described_class.new }
 
       let(:raw_mail) { <<~RAW.chomp }
-        To: baz@quqx.net
+        To: baz@qux.net
         Subject: Foo
 
         Lorem ipsum dolor
@@ -88,7 +88,7 @@ RSpec.describe Channel::EmailParser, type: :model do
       end
 
       it 'ensures tests were dynamically generated' do
-        expect(Rails.root.glob('test/data/mail/mail*box').count).to eq(114)
+        expect(Rails.root.glob('test/data/mail/mail*.box').count).to eq(114)
       end
     end
 
@@ -96,7 +96,7 @@ RSpec.describe Channel::EmailParser, type: :model do
     describe 'handling HTML links in message content' do
       context 'with under 5,000 links' do
         it 'parses message content as normal' do
-          expect(described_class.new.parse(<<~RAW)[:body]).to start_with('<a href:"https://zammad.com/"')
+          expect(described_class.new.parse(<<~RAW)[:body]).to start_with('<a href="https://zammad.com/"')
             From: nicole.braun@zammad.com
             Content-Type: text/html
 
@@ -121,8 +121,8 @@ RSpec.describe Channel::EmailParser, type: :model do
       end
     end
 
-    describe 'handling Japanese email in ISO-20220JP encoding' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail0091.box') }
+    describe 'handling Japanese email in ISO-2022-JP encoding' do
+      let(:mail_file) { Rails.root.join('test/data/mail/mail091.box') }
       let(:raw_mail)  { File.read(mail_file) }
       let(:parsed)    { described_class.new.parse(raw_mail) }
 
@@ -145,7 +145,7 @@ RSpec.describe Channel::EmailParser, type: :model do
 
     describe 'inline attachment' do
       let(:cid)   { '485376C9-2486-4351-B932-E2010998F579@home' }
-      let(:html)  { "test<img src='cid:#{cid}'>" }
+      let(:html)  { "test <img src='cid:#{cid}'>" }
       let(:store) { create(:store, :image, preferences: store_preferences) }
 
       let(:store_preferences) do
@@ -202,7 +202,7 @@ RSpec.describe Channel::EmailParser, type: :model do
     before { Trigger.destroy_all } # triggers may cause additional articles to be created
 
     describe 'auto-creating new users' do
-      context 'with one unrecognized mail address' do
+      context 'with one unrecognized email address' do
         it 'creates one new user' do
           expect { described_class.new.process({}, <<~RAW) }.to change(User, :count).by(1)
             From: #{Faker::Internet.unique.email}
@@ -210,9 +210,9 @@ RSpec.describe Channel::EmailParser, type: :model do
         end
       end
 
-      context 'with a large number of unrecognized recipient address' do
+      context 'with a large number of unrecognized recipient addresses' do
         it 'never creates more than 40 users' do
-          expect { described_class.process({}, <<~RAW) }.to change(User, :count).by(40)
+          expect { described_class.new.process({}, <<~RAW) }.to change(User, :count).by(40)
             From: nicole.braun@zammad.org
             To: #{Array.new(20) { Faker::Internet.unique.email }.join(', ')}
             Cc: #{Array.new(21) { Faker::Internet.unique.email }.join(', ')}
@@ -220,8 +220,8 @@ RSpec.describe Channel::EmailParser, type: :model do
         end
       end
 
-      context 'with two unrecognized email address with international domain name' do
-        it 'creates new user email unicode characters', :aggregate_failures do
+      context 'with two unrecognizded email addresses with international domain name' do
+        it 'create new user email unicode characters', :aggregate_failures do
           expect { described_class.new.process({}, <<~RAW) }.to change(User, :count).by(2)
             From: john.doe@xn--cme-pla.corp
             To: jane.doe@xn--cme-pla.corp
@@ -240,11 +240,11 @@ RSpec.describe Channel::EmailParser, type: :model do
           channel
         end
 
-        it 'creates no new user for system mail address in cc' do
-          expect { described_class({}, <<~RAW) }.to change(User, :count).by(1)
+        it 'creates no new user for system mail adress in cc' do
+          expect { described_class.new.process({}, <<~RAW) }.to change(User, :count).by(1)
             From: nicole.braun@zammad.org
             To: #{email_address.email}
-            Cc: #{email_address}, #{Faker::Internet.unique.email}
+            Cc: #{email_address.email}, #{Faker::Internet.unique.email}
           RAW
         end
       end
@@ -271,7 +271,7 @@ RSpec.describe Channel::EmailParser, type: :model do
             Some Text
           RAW
 
-          it 'updates the customers #firstname and #lastname' do
+          it 'updates the customer’s #firstname and #lastname' do
             expect { described_class.new.process({}, new_email) }
               .to change { customer.reload.firstname }.from('').to('Max')
               .and change { customer.reload.lastname }.from('').to('Smith')
@@ -282,14 +282,14 @@ RSpec.describe Channel::EmailParser, type: :model do
       describe 'handle database failures' do
         subject(:instance) { described_class.new }
 
-        let(:mail_data) { attributes_for(:failed_email)[:data] }
+        let(:mail_data)    { attributes_for(:failed_email)[:data] }
 
         before do
           allow(instance).to receive(:process_with_timeout).and_raise('error')
           allow_any_instance_of(FailedEmail).to receive(:valid?).and_return(false)
         end
 
-        it 'raise error even if exception is false' do
+        it 'raises error even if exception is false' do
           expect { instance.process({}, mail_data, false) }
             .to raise_error(ActiveRecord::ActiveRecordError)
         end
@@ -341,7 +341,7 @@ RSpec.describe Channel::EmailParser, type: :model do
 
         context 'when from address matches an existing agent' do
           before do
-            Setting.set('postmaster_sender_is_agent_for_customer', search_for_customer)
+            Setting.set('postmaster_sender_is_agent_search_for_customer', search_for_customer)
           end
 
           describe 'postmaster filter group routing' do
@@ -354,7 +354,7 @@ RSpec.describe Channel::EmailParser, type: :model do
 
             before { agent && postmaster_filter }
 
-            context 'when agent-customer is customer in target group nut postmaster filter routes to another group' do
+            context 'when agent-customer is customer in target group but postmaster filter routes to another group' do
               let(:agent_group) { routed_group }
 
               it 'sets article.sender to "Agent"' do
@@ -400,7 +400,7 @@ RSpec.describe Channel::EmailParser, type: :model do
               end
             end
 
-            context 'when search for customer id true' do
+            context 'when search for customer is true' do
               let(:search_for_customer) { true }
 
               it 'sets article.sender to "Agent"' do
@@ -475,7 +475,7 @@ RSpec.describe Channel::EmailParser, type: :model do
         context 'when from address matches an existing agent customer' do
           let!(:agent_customer) { create(:agent_and_customer, email: 'foo@bar.com') }
           let!(:ticket)         { create(:ticket, customer: agent_customer) }
-          let!(:raw_mail) { <<~RAW.chomp }
+          let!(:raw_email)      { <<~RAW.chomp }
             From: foo@bar.com
             To: myzammad@example.com
             Subject: [#{Setting.get('ticket_hook') + Setting.get('ticket_hook_divider') + ticket.number}] test
@@ -484,7 +484,7 @@ RSpec.describe Channel::EmailParser, type: :model do
           RAW
 
           it 'sets article.sender to "Customer"' do
-            described_class.new.process({}, raw_mail)
+            described_class.new.process({}, raw_email)
 
             expect(Ticket::Article.last.sender.name).to eq('Customer')
           end
@@ -560,7 +560,7 @@ RSpec.describe Channel::EmailParser, type: :model do
         context 'when channel is not trusted' do
           let(:channel) { create(:channel, options: { inbound: { trusted: false } }) }
 
-          it 'does not change the priority of ticket (no channel)' do
+          it 'does not change the priority of the ticket (no channel)' do
             described_class.new.process({}, raw_mail)
 
             expect(Ticket.last.priority.name).to eq('2 normal')
@@ -603,7 +603,7 @@ RSpec.describe Channel::EmailParser, type: :model do
       end
     end
 
-    describe 'association emails to existind tickets' do
+    describe 'associating emails to existing tickets' do
       let!(:ticket) { create(:ticket) }
       let(:ticket_ref) { Setting.get('ticket_hook') + Setting.get('ticket_hook_divider') + ticket.number }
 
@@ -619,7 +619,7 @@ RSpec.describe Channel::EmailParser, type: :model do
         end
 
         shared_context 'ticket reference in body' do
-          let(:raw_mail) { <<~RAW.vhomp }
+          let(:raw_mail) { <<~RAW.chomp }
             From: me@example.com
             To: customer@example.com
             Subject: no reference
@@ -670,7 +670,7 @@ RSpec.describe Channel::EmailParser, type: :model do
           RAW
         end
 
-        shared_context 'ticket reference in text/html (as content attachment)' do
+        shared_context 'ticket reference in text/html (as content) attachment' do
           let(:raw_mail) { <<~RAW.chomp }
             From: me@example.com
             Content-Type: multipart/mixed; boundary="Apple-Mail=_ED77AC8D-FB6F-40E5-8FBE-D41FF5E1BAF2"
@@ -808,9 +808,9 @@ RSpec.describe Channel::EmailParser, type: :model do
         context 'when configured to search subject_references' do
           context 'when subject contains ticket reference' do
             include_context 'ticket reference in subject'
-            include_examples 'adds message to ticke'
+            include_examples 'adds message to ticket'
 
-            context 'alonside other, invalid ticket references' do
+            context 'alongside other, invalid ticket references' do
               let(:raw_mail) { <<~RAW.chomp }
                 From: me@example.com
                 To: customer@example.com
@@ -828,7 +828,7 @@ RSpec.describe Channel::EmailParser, type: :model do
               include_examples 'adds message to ticket'
             end
 
-            context 'but ticket groups #follow_up_possible attribute is "new_ticket"' do
+            context 'but ticket group’s #follow_up_possible attribute is "new_ticket"' do
               before { ticket.group.update(follow_up_possible: 'new_ticket') }
 
               context 'and ticket is open' do
@@ -860,7 +860,7 @@ RSpec.describe Channel::EmailParser, type: :model do
               let(:raw_mail) { Rails.root.join('spec/fixtures/files/pgp/mail/mail-combined.box').read.to_s }
 
               before do
-                Setting.set('ticket_number_ignore_system_id', true) # this is needed to allow hardcore ticket reference
+                Setting.set('ticket_number_ignore_system_id', true) # this is needed to allow hardcoded ticket reference
                 Setting.set('pgp_integration', true)
 
                 (1..3).each { |i| create(:pgp_key, :with_private, fixture: "pgp#{i}@example.com") }
@@ -929,7 +929,7 @@ RSpec.describe Channel::EmailParser, type: :model do
           end
 
           context 'when References header contains article message-id' do
-            include_context 'ticket reference in references header'
+            include_context 'ticket reference in References header'
             include_examples 'creates a new ticket'
 
             context 'and Auto-Submitted header reads "auto-replied"' do
@@ -962,7 +962,7 @@ RSpec.describe Channel::EmailParser, type: :model do
             context 'and "ticket_hook_position" setting is "none"' do
               before { Setting.set('ticket_hook_position', 'none') }
 
-              let(:raw_mail) { <<~RAW.chop }
+              let(:raw_mail) { <<~RAW.chomp }
                 From: customer@example.com
                 To: me@example.com
                 Subject: RE: Foo bar
@@ -987,7 +987,7 @@ RSpec.describe Channel::EmailParser, type: :model do
           context 'when body contains ticket reference' do
             context 'in visible text' do
               include_context 'ticket reference in body'
-              include_examples 'adds message to ticket' # 989
+              include_examples 'adds message to ticket'
             end
 
             context 'in visible text with a linebreak' do
@@ -1013,9 +1013,9 @@ RSpec.describe Channel::EmailParser, type: :model do
               include_examples 'creates a new ticket'
             end
 
-            context 'between html tads' do
+            context 'between html tags' do
               include_context 'ticket reference in body (text/html)'
-              include_examples 'adds messa to ticket'
+              include_examples 'adds message to ticket'
             end
 
             context 'in html attributes' do
@@ -1048,7 +1048,7 @@ RSpec.describe Channel::EmailParser, type: :model do
             include_examples 'creates a new ticket'
           end
 
-          context 'when On-Reply-To header contains article message-id' do
+          context 'when In-Reply-To header contains article message-id' do
             include_context 'ticket reference in In-Reply-To header'
             include_examples 'creates a new ticket'
 
@@ -1076,7 +1076,7 @@ RSpec.describe Channel::EmailParser, type: :model do
         context 'when configured to search attachments' do
           before { Setting.set('postmaster_follow_up_search_in', 'attachment') }
 
-          context 'when subject contaiins ticket reference' do
+          context 'when subject contains ticket reference' do
             include_context 'ticket reference in subject'
             include_examples 'adds message to ticket'
           end
@@ -1096,551 +1096,879 @@ RSpec.describe Channel::EmailParser, type: :model do
             include_examples 'adds message to ticket'
           end
 
-          context 'when text/html attachment (attribute) contains ticket reference'
-          include_context 'ticket reference in text/html (attribute) attachment'
-          include_examples 'creates a new ticket'
+          context 'when text/html attachment (attribute) contains ticket reference' do
+            include_context 'ticket reference in text/html (attribute) attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when image/jpg attachment contains ticket reference' do
+            include_context 'ticket reference in image/jpg attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when In-Reply-To header contains article message-id' do
+            include_context 'ticket reference in In-Reply-To header'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when References header contains article message-id' do
+            include_context 'ticket reference in References header'
+            include_examples 'creates a new ticket'
+
+            context 'and Auto-Submitted header reads "auto-replied"' do
+              let(:raw_mail) { <<~RAW.chomp }
+                From: me@example.com
+                To: customer@example.com
+                Subject: no reference
+                References: #{article.message_id}
+                Auto-Submitted: auto-replied
+
+                Lorem ipsum dolor
+              RAW
+
+              include_examples 'adds message to ticket'
+            end
+          end
         end
 
-        context 'when image/jpg attachment contains ticket reference' do
-          include_context 'ticket reference in image/jpg attachment'
-          include_examples 'creates a new ticket'
-        end
+        context 'when configured to search headers' do
+          before { Setting.set('postmaster_follow_up_search_in', 'references') }
 
-        context 'when In-Reply-To header contains article message-id' do
-          include_context 'ticket reference in In-Reply-To header'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when References header contains article message-id' do
-          include_context 'ticket reference in References header'
-          include_examples 'creates a new ticket'
-
-          context 'and Auto-Submitted header reads "auto-replied"' do
-            let(:raw_mail) { <<~RAW.chomp }
-              From: me@example.com
-              To: customer@example.com
-              Subject: no reference
-              References: #{article.message_id}
-              Auto-Submitted: auto-replied
-
-              Lorem ipsum dolor
-            RAW
-
+          context 'when subject contains ticket reference' do
+            include_context 'ticket reference in subject'
             include_examples 'adds message to ticket'
+          end
+
+          context 'when body contains ticket reference' do
+            include_context 'ticket reference in body'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when text/plain attachment contains ticket reference' do
+            include_context 'ticket reference in text/plain attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when text/html attachment (as content) contains ticket reference' do
+            include_context 'ticket reference in text/html (as content) attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when text/html attachment (attribute) contains ticket reference' do
+            include_context 'ticket reference in text/html (attribute) attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when image/jpg attachment contains ticket reference' do
+            include_context 'ticket reference in image/jpg attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when In-Reply-To header contains article message-id' do
+            include_context 'ticket reference in In-Reply-To header'
+            include_examples 'adds message to ticket'
+          end
+
+          context 'when References header contains article message-id' do
+            include_context 'ticket reference in References header'
+            include_examples 'adds message to ticket'
+
+            context 'that matches two separate tickets' do
+              let!(:newer_ticket) { create(:ticket) }
+              let!(:newer_article) { create(:ticket_article, ticket: newer_ticket, message_id: article.message_id) }
+
+              it 'returns more recently created ticket' do
+                expect(described_class.new.process({}, raw_mail).first).to eq(newer_ticket)
+              end
+
+              it 'adds message to more recently created ticket' do
+                expect { described_class.new.process({}, raw_mail) }
+                  .to change { newer_ticket.articles.reload.count }.by(1)
+                  .and(not_change { ticket.articles.reload.count })
+              end
+            end
+
+            context 'and Auto-Submitted header reads "auto-replied"' do
+              let(:raw_mail) { <<~RAW.chomp }
+                From: me@example.com
+                To: customer@example.com
+                Subject: no reference
+                References: #{article.message_id}
+                Auto-Submitted: auto-replied
+
+                Lorem ipsum dolor
+              RAW
+
+              include_examples 'adds message to ticket'
+            end
+          end
+        end
+
+        context 'when configured to search everything' do
+          before { Setting.set('postmaster_follow_up_search_in', %w[body attachment references]) }
+
+          context 'when subject contains ticket reference' do
+            include_context 'ticket reference in subject'
+            include_examples 'adds message to ticket'
+          end
+
+          context 'when body contains ticket reference' do
+            include_context 'ticket reference in body'
+            include_examples 'adds message to ticket'
+          end
+
+          context 'when text/plain attachment contains ticket reference' do
+            include_context 'ticket reference in text/plain attachment'
+            include_examples 'adds message to ticket'
+          end
+
+          context 'when text/html attachment (as content) contains ticket reference' do
+            include_context 'ticket reference in text/html (as content) attachment'
+            include_examples 'adds message to ticket'
+          end
+
+          context 'when text/html attachment (attribute) contains ticket reference' do
+            include_context 'ticket reference in text/html (attribute) attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when image/jpg attachment contains ticket reference' do
+            include_context 'ticket reference in image/jpg attachment'
+            include_examples 'creates a new ticket'
+          end
+
+          context 'when In-Reply-To header contains article message-id' do
+            include_context 'ticket reference in In-Reply-To header'
+            include_examples 'adds message to ticket'
+          end
+
+          context 'when References header contains article message-id' do
+            include_context 'ticket reference in References header'
+            include_examples 'adds message to ticket'
+
+            context 'and Auto-Submitted header reads "auto-replied"' do
+              let(:raw_mail) { <<~RAW.chomp }
+                From: me@example.com
+                To: customer@example.com
+                Subject: no reference
+                References: #{article.message_id}
+                Auto-Submitted: auto-replied
+
+                Lorem ipsum dolor
+              RAW
+
+              include_examples 'adds message to ticket'
+            end
           end
         end
       end
 
-      context 'when configured to search headers' do
-        before { Setting.set('postmaster_follow_up_search_in', 'references') }
+      context 'for a closed ticket' do
+        let(:ticket) { create(:ticket, state_name: 'closed') }
 
-        context 'when subject contains ticket reference' do
-          include_context 'ticket reference in subject'
-          include_examples 'adds message to ticket'
+        let(:raw_mail) { <<~RAW.chomp }
+          From: me@example.com
+          To: customer@example.com
+          Subject: #{ticket_ref}
+
+          Lorem ipsum dolor
+        RAW
+
+        it 'reopens it' do
+          expect { described_class.new.process({}, raw_mail) }
+            .to change { ticket.reload.state.name }.to('open')
         end
 
-        context 'when body ticket reference' do
-          include_context 'ticket reference in body'
-          include_examples 'creates a new ticket'
-        end
+        context 'when group has follow_up_assignment true' do
+          let(:group) { create(:group, follow_up_assignment: true) }
+          let(:agent)  { create(:agent, groups: [group]) }
+          let(:ticket) { create(:ticket, state_name: 'closed', owner: agent, group:) }
 
-        context 'when text/plain attachment contains ticket reference' do
-          include_context 'ticket reference in text/plain attachment'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when text/html attachment (as content) contains ticket reference' do
-          include_context 'ticket reference in text/html (as content) attachment'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when text/html attachment (attribute) contains ticket reference' do
-          include_context 'ticket reference in text/html (attribute) attachment'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when image/jpg attachment contains ticket reference' do
-          include_context 'ticket reference in image/jpg attachment'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when In-Reply-To header contains article message-id' do
-          include_context 'ticket reference in In-Reply-To header'
-          include_examples 'adds message to ticket'
-        end
-
-        context 'when References header contains article message-id' do
-          include_context 'ticket reference in References header'
-          include_examples 'adds message to ticket'
-
-          context 'that matches two separate tickets' do
-            let!(:newer_ticket)  { create(:ticket) }
-            let!(:newer_article) { create(:ticket_article, ticket: newer_ticket, message_id: article.message_id) }
-
-            it 'returns more recently created ticket' do
-              expect(described_class.new.process({}, raw_mail).first).to eq(newer_ticket)
-            end
-
-            it 'adds message to more recently created ticket' do
-              expect { described_class.new.process({}, raw_mail) }
-                .to change { newer_ticket.articles.reload.count }.by(1)
-                .and(not_change { ticket.articles.reload.count })
-            end
-          end
-
-          context 'and Auto-Submitted header reads "auto-replied"' do
-            let(:raw_mail) { <<~RAW.chop }
-              From: me@example.com
-              To: customer@example.com
-              Subject: no reference
-              References: #{article.message_id}
-              Auto-Submitted: auto-replied
-
-              Lorem ipsum dolor
-            RAW
-
-            include_examples 'adds messages to ticket'
+          it 'does not change the owner' do
+            expect { described_class.new.process({}, raw_mail) }
+              .not_to(change { ticket.reload.owner.login })
           end
         end
-      end
 
-      context 'when configured to search everything' do
-        before { Setting.set('postmaster_follow_up_search_in', %w[body attachment references]) }
+        context 'when group has follow_up_assignment false' do
+          let(:group) { create(:group, follow_up_assignment: false) }
+          let(:agent)  { create(:agent, groups: [group]) }
+          let(:ticket) { create(:ticket, state_name: 'closed', owner: agent, group:) }
 
-        context 'when subject contains ticket reference' do
-          include_context 'ticket reference in subject'
-          include_examples 'adds message to ticket'
-        end
-
-        context 'when body contains ticket reference' do
-          include_context 'ticket reference in body'
-          include_examples 'adds message to ticket'
-        end
-
-        context 'when text/plain attachment contains ticket reference' do
-          include_context 'ticket reference in text/plain attachment'
-          include_examples 'adds message to ticket'
-        end
-
-        context 'when text/html attachment (as content) contains ticket reference' do
-          include_context 'ticket reference in text/html (as content) attachment'
-          include_examples 'adds message to ticket'
-        end
-
-        context 'when text/html attachment (attribute) conteains ticket reference' do
-          include_context 'ticket reference in text/html (attribute) attachment'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when image/jpg attachment contains ticket reference' do
-          include_context 'ticket reference in image/jpg attachment'
-          include_examples 'creates a new ticket'
-        end
-
-        context 'when In-Reply-To header contains article message-id' do
-          include_context 'ticket reference in In-Reply-To header'
-          include_examples 'adds message to ticket'
-        end
-
-        context 'when References header contains article message-id' do
-          include_context 'ticket reference in References header'
-          include_examples 'adds message to ticket'
-
-          context 'and Auto-Submitted header reads "auto-replied"' do
-            let(:raw_mail) { <<~RAW.chomp }
-              From: me@example.com
-              To: customer@example.com
-              Subject: no reference
-              References: #{article.message_id}
-              Auto-Submitted: auto-replied
-
-              Lorem ipsum dolor
-            RAW
-
-            include_examples 'adds message to ticket'
+          it 'does change the owner' do
+            expect { described_class.new.process({}, raw_mail) }
+              .to change { ticket.reload.owner.login }.to eq(User.find(1).login)
           end
         end
       end
     end
 
-    context 'for a closed ticket' do
-      let(:ticket) { create(:ticket, state_name: 'closed') }
+    describe 'assigning ticket.customer' do
+      let(:agent) { create(:agent) }
+      let(:customer) { create(:customer) }
 
       let(:raw_mail) { <<~RAW.chomp }
-        From: me@example.com
-        To: customer@example.com
-        Subject: #{ticket_ref}
+        From: #{agent.email}
+        To: #{customer.email}
+        Subject: Foo
 
         Lorem ipsum dolor
       RAW
 
-      it 'reopens it' do
-        expect { described_class.new.process({}, raw_mail) }
-          .to change { ticket.reload.state.name }.to('open')
-      end
-
-      context 'when group has follow_up_assignment true' do
-        let(:group) { create(:group, follow_up_assignment: true) }
-        let(:agent) { create(:agent, groups: [group]) }
-        let(:ticket) { create(:ticket, state_name: 'closed', owner: agent, group:) }
-
-        it 'does not change the owner' do
+      context 'when "postmaster_sender_is_agent_search_for_customer" setting is true (default)' do
+        it 'sets ticket.customer to user with To: email' do
           expect { described_class.new.process({}, raw_mail) }
-            .not_to(change { ticket.reload.owner.login })
+            .to change(Ticket, :count).by(1)
+
+          expect(Ticket.last.customer).to eq(customer)
         end
       end
 
-      context 'when group has follow_up_assignment false' do
-        let(:group)  { create(:group, follow_up_assignment: false) }
-        let(:agent)  { create(:agent, groups: [group]) }
-        let(:ticket) { create(:ticket, state_name: 'closed', owner: agent, group:) }
+      context 'when "postmaster_sender_is_agent_search_for_customer" setting is false' do
+        before { Setting.set('postmaster_sender_is_agent_search_for_customer', false) }
 
-        it 'does change the owner' do
+        it 'sets ticket.customer to user with To: email' do
           expect { described_class.new.process({}, raw_mail) }
-            .to change { ticket.reload.owner.login }.to eq(User.find(1).login)
+            .to change(Ticket, :count).by(1)
+
+          expect(Ticket.last.customer).to eq(agent)
         end
       end
     end
-  end
 
-  describle 'assigning ticket.customer' do
-    let(:agent) { create(:agent) }
-    let(:customer) { create(:customer) }
+    describe 'formatting to/from addresses' do
+      # see https://github.com/zammad/zammad/issues/2198
+      context 'when sender address contains spaces (#2198)' do
+        let(:mail_file)    { Rails.root.join('test/data/mail/mail071.box') }
+        let(:sender_email) { 'powerquadrantsystem@example.com' }
 
-    let(:raw_mail) { <<~RAW.chomp }
-      From: #{agent.email}
-      To: #{customer.email}
-      Subject: Foo
+        it 'removes them before creating a new user' do
+          expect { described_class.new.process({}, raw_mail) }
+            .to(change { User.exists?(email: sender_email) })
+        end
 
-      Lorem ipsum dolor
-    RAW
+        it 'marks new user email as invalid' do
+          described_class.new.process({}, raw_mail)
 
-    context 'when "postmaster_sender_is_agent_search_for_customer" setting is true (default)' do
-      it 'sets ticket.customer to user with To: email' do
-        expect { described_class.new.process({}, raw_mail) }
-          .to change(Ticket, :count).by(1)
-
-        expect(Ticket.last.customer).to eq(customer)
-      end
-    end
-
-    context 'when "postmaster_sender_is_agent_search_for_customer" setting is false' do
-      before { Setting.set('postmaster_sender_is_agent_search_for_customer', false) }
-
-      it 'sets ticket.customer to user with To: email' do
-        expect { described_class.new.process({}, raw_mail) }
-          .to change(Ticket, :count).by(1)
-
-        expect(Ticket.last.customer).to eq(agent)
-      end
-    end
-  end
-
-  describe 'formatting to/from address' do
-    # see https://github.com/zammad/zammad/issues/2198
-    context 'when sender address contains spaces (#2198)' do
-      let(:mail_file)    { Rails.root.join('test/data/mail/mail071.box') }
-      let(:sender_email) { 'powerquadrantssystem@example.com' }
-
-      it 'removes them before creating a new user' do
-        expect { described_class.process({}, raw_mail) }
-          .to(change { User.exists?(email: sender_email) })
-      end
-
-      it 'marks new user email as invalid' do
-        described_class.new.process({}, raw_mail)
-
-        expect(User.find_by(email: sender_email).preferences)
-          .to include('mail_delivery_failed' => true)
-          .and include('mail_delivery_failed_reson' => 'invalid email')
-          .and include('mail_delivery_failed_data' => a_kind_of(ActiveSupport::TimeWithZone))
-      end
-    end
-
-    # see https://github.com/zammad/zammad/issues/2254
-    context 'when sender address contains > (#2254)' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail076.box') }
-      let(:sender_mail) { 'illionslotteryspaintransfer@example.com' }
-
-      it 'removes them before creating a new user' do
-        expect { described_class.new.process({}, raw_mail) }
-          .to(change { User.exists?(email: sender_email) })
-      end
-
-      it 'marks new user email as invalid' do
-        described_class.new.process({}, raw_mail)
-
-        expect(User.find_by(email: sender_email).preferences)
-          .to include('mail_delivery_failed' => true)
-          .and include('mail_delivey_failed_reason' => 'invalid email')
-          .and include('mail_delivery_data' => a_kind_of(ActiveSupport::TimeWithZone))
-      end
-    end
-  end
-
-  describe 'signature detection', performs_jobs: true do
-    let(:raw_mail) { header + File.read(message_file) }
-
-    let(:header) { <<~HEADER }
-      From: Bob.Smith@music.com
-      To: test@zammad.org
-      Subject: test
-
-    HEADER
-
-    context 'for emails from an unrecognized email address' do
-      let(:message_file) { Rails.root.join('test/data/email_signature_detection/client_a_1.txt') }
-
-      it 'does not detect signatures' do
-        described_class.new.process({}, raw_mail)
-
-        expect { perform_enqueued_jobs }
-          .to not_change { Ticket.last.customer.preferences[:signature_detection] }.from(nil)
-          .and not_change { Ticket.last.articles.reload.first.preferences[:signatures_detection] }.from(nil)
-      end
-    end
-
-    context 'for emails from a previously processed sender' do
-      before do
-        described_class.new.process({}, header + File.read(previous_message_file))
-      end
-
-      let(:previous_message_file) { Rails.root.join('test/data/email_signature_detection/client_a_1.txt') }
-
-      let(:message_file) { Rails.root.join('test/data/email_signature_detection/client_a_2.txt') }
-
-      it 'sets detect signature on user (in a backgroud job)' do
-        described_class.new.process({}, raw_mail)
-
-        expect { perform_enqueued_jobs }
-          .to(change { Ticket.last.customer.preferences[:signature_detection] })
-      end
-
-      it 'sets line of detected signature on article (in a background job)' do
-        described_class.new.process({}, raw_mail)
-
-        expect { perform_enqueued_jobs }
-          .to change { Ticket.last.articles.reload.first.preferences[:signature_detection] }.to(20)
-      end
-    end
-  end
-
-  describe 'charset handling' do
-    # see https://github.com/zammad/zammad/issues/2224
-    context 'when header specifies Windows-1258 charset (#2224)' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail072.box') }
-
-      it 'does not raise Encoding::ConverteNotFOundError' do
-        expect { described_class.new.process({}, raw_mail) }
-          .not_to raise_error
-      end
-    end
-
-    context 'when attachment for follow up check contains invalid charsets (#2808)' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail085.box') }
-
-      before { Setting.set('postmaster_follow_up_search_in', %w[attachment body]) }
-
-      it 'does not raise Encoding::CompatibilityError:' do
-        expect { described_class.new.process({}, raw_mail) }
-          .not_to raise_error
-      end
-    end
-  end
-
-  describe 'attachment handling' do
-    context 'with header "Content-Transfer-Encoding: x-uuencode"' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail078-content_transfer_encoding_x_uuencode.box') }
-      let(:article) { described_class.new({}, raw_mail).second }
-
-      it 'does not raise RuntimeError' do
-        expect { described_class.process({}, raw_mail) }
-          .not_to raise_error
-      end
-
-      it 'parses the content correctly' do
-        expect(article.attachments.first.filename).to eq('PGP_Cmts_on_12-14-01_Pkg.txt')
-        expect(article.attachments.first.content).to eq('Hello Zammad')
-      end
-    end
-
-    # https://github.com/zammad/zammad/issues/3529
-    context 'Attachments sent by Zammad not shown in Outlook' do
-      subject(:mail) do
-        Channel::EmailBuild.build(
-          from: 'sender@example.com',
-          to: 'recipient@example.com',
-          body:,
-          content_type: 'text/html',
-          attachments: Store.where(filename: 'super-seven.jpg')
-        )
-      end
-
-      let(:mail_file) { Rails.root.join('test/data/mail/mail101.box') }
-
-      before do
-        described_class.new.process({}, raw_mail)
-      end
-
-      context 'when no reference in vody' do
-        let(:body) { 'no refernce here' }
-
-        it 'does not have content disposition inline' do
-          expect(mail.to_s).to include('Content-Disposition: attachment').and not_include('Content-Disposition: inline')
+          expect(User.find_by(email: sender_email).preferences)
+            .to include('mail_delivery_failed' => true)
+            .and include('mail_delivery_failed_reason' => 'invalid email')
+            .and include('mail_delivery_failed_data' => a_kind_of(ActiveSupport::TimeWithZone))
         end
       end
 
-      context 'when reference in body' do
-        let(:body) do
-          %(somebody with some text <img src="cid:#{Store.find_by(filename: 'super-seven.jpg').preferences['Content-ID']}">)
+      # see https://github.com/zammad/zammad/issues/2254
+      context 'when sender address contains > (#2254)' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail076.box') }
+        let(:sender_email) { 'millionslotteryspaintransfer@example.com' }
+
+        it 'removes them before creating a new user' do
+          expect { described_class.new.process({}, raw_mail) }
+            .to(change { User.exists?(email: sender_email) })
         end
 
-        it 'does have content disposition inline' do
-          expect(mail.to_s).to include('Content-Disposition: inline').and not_include('Content-Disposition: attachment')
+        it 'marks new user email as invalid' do
+          described_class.new.process({}, raw_mail)
+
+          expect(User.find_by(email: sender_email).preferences)
+            .to include('mail_delivery_failed' => true)
+            .and include('mail_delivery_failed_reason' => 'invalid email')
+            .and include('mail_delivery_failed_data' => a_kind_of(ActiveSupport::TimeWithZone))
+        end
+      end
+    end
+
+    describe 'signature detection', performs_jobs: true do
+      let(:raw_mail) { header + File.read(message_file) }
+
+      let(:header) { <<~HEADER }
+        From: Bob.Smith@music.com
+        To: test@zammad.org
+        Subject: test
+
+      HEADER
+
+      context 'for emails from an unrecognized email address' do
+        let(:message_file) { Rails.root.join('test/data/email_signature_detection/client_a_1.txt') }
+
+        it 'does not detect signatures' do
+          described_class.new.process({}, raw_mail)
+
+          expect { perform_enqueued_jobs }
+            .to not_change { Ticket.last.customer.preferences[:signature_detection] }.from(nil)
+            .and not_change { Ticket.last.articles.reload.first.preferences[:signature_detection] }.from(nil)
+        end
+      end
+
+      context 'for emails from a previously processed sender' do
+        before do
+          described_class.new.process({}, header + File.read(previous_message_file))
         end
 
-        context 'when encoded as ISO-8859-1' do
-          let(:body) { super().encode('ISO-8859-1') }
+        let(:previous_message_file) { Rails.root.join('test/data/email_signature_detection/client_a_1.txt') }
 
-          it 'does not raise exception' do
-            expect { mail.to_s }.not_to raise_error
+        let(:message_file) { Rails.root.join('test/data/email_signature_detection/client_a_2.txt') }
+
+        it 'sets detected signature on user (in a background job)' do
+          described_class.new.process({}, raw_mail)
+
+          expect { perform_enqueued_jobs }
+            .to(change { Ticket.last.customer.preferences[:signature_detection] })
+        end
+
+        it 'sets line of detected signature on article (in a background job)' do
+          described_class.new.process({}, raw_mail)
+
+          expect { perform_enqueued_jobs }
+            .to change { Ticket.last.articles.reload.first.preferences[:signature_detection] }.to(20)
+        end
+      end
+    end
+
+    describe 'charset handling' do
+      # see https://github.com/zammad/zammad/issues/2224
+      context 'when header specifies Windows-1258 charset (#2224)' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail072.box') }
+
+        it 'does not raise Encoding::ConverterNotFoundError' do
+          expect { described_class.new.process({}, raw_mail) }
+            .not_to raise_error
+        end
+      end
+
+      context 'when attachment for follow up check contains invalid charsets (#2808)' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail085.box') }
+
+        before { Setting.set('postmaster_follow_up_search_in', %w[attachment body]) }
+
+        it 'does not raise Encoding::CompatibilityError:' do
+          expect { described_class.new.process({}, raw_mail) }
+            .not_to raise_error
+        end
+      end
+    end
+
+    describe 'attachment handling' do
+      context 'with header "Content-Transfer-Encoding: x-uuencode"' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail078-content_transfer_encoding_x_uuencode.box') }
+        let(:article)   { described_class.new.process({}, raw_mail).second }
+
+        it 'does not raise RuntimeError' do
+          expect { described_class.new.process({}, raw_mail) }
+            .not_to raise_error
+        end
+
+        it 'parses the content correctly' do
+          expect(article.attachments.first.filename).to eq('PGP_Cmts_on_12-14-01_Pkg.txt')
+          expect(article.attachments.first.content).to eq('Hello Zammad')
+        end
+      end
+
+      # https://github.com/zammad/zammad/issues/3529
+      context 'Attachments sent by Zammad not shown in Outlook' do
+        subject(:mail) do
+          Channel::EmailBuild.build(
+            from: 'sender@example.com',
+            to: 'recipient@example.com',
+            body:,
+            content_type: 'text/html',
+            attachments: Store.where(filename: 'super-seven.jpg')
+          )
+        end
+
+        let(:mail_file) { Rails.root.join('test/data/mail/mail101.box') }
+
+        before do
+          described_class.new.process({}, raw_mail)
+        end
+
+        context 'when no reference in body' do
+          let(:body) { 'no reference here' }
+
+          it 'does not have content disposition inline' do
+            expect(mail.to_s).to include('Content-Disposition: attachment').and not_include('Content-Disposition: inline')
+          end
+        end
+
+        context 'when reference in body' do
+          let(:body) do
+            %(somebody with some text <img src="cid:#{Store.find_by(filename: 'super-seven.jpg').preferences['Content-ID']}">)
+          end
+
+          it 'does have content disposition inline' do
+            expect(mail.to_s).to include('Content-Disposition: inline').and not_include('Content-Disposition: attachment')
+          end
+
+          context 'when encoded as ISO-8859-1' do
+            let(:body) { super().encode('ISO-8859-1') }
+
+            it 'does not raise exception' do
+              expect { mail.to_s }.not_to raise_error
+            end
           end
         end
       end
     end
-  end
 
-  describe 'inline image handling' do
-    # see https://github.com/zammad/zammad/issues/2486
-    context 'when image is large but not resizable' do
-      let(:mail_file)  { Rails.root.join('test/data/mail/mail079.box') }
-      let(:attachment) { article.attachment.to_a.find { |i| i.filename == 'a.jpg' } }
-      let(:article)    { described_class.new.process({}, raw_mail).second }
+    describe 'inline image handling' do
+      # see https://github.com/zammad/zammad/issues/2486
+      context 'when image is large but not resizable' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail079.box') }
+        let(:attachment) { article.attachments.to_a.find { |i| i.filename == 'a.jpg' } }
+        let(:article)    { described_class.new.process({}, raw_mail).second }
 
-      it "doesn't set resizable preference" do
-        expect(attachment.filename).to eq('a.jpg')
-        expect(attachment.preferences).not_to include('resizable' => true)
-      end
-    end
-  end
-
-  describe 'ServiceNow hanling' do
-    context 'new Ticket' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail089.box') }
-
-      it 'creates an ExternalSync reference' do
-        described_class.new.process({}, raw_mail)
-
-        expect(ExternalSync.last).to have_attributes(
-          source: 'ServiceNow-example@service-now.com',
-          source_id: 'INC678439',
-          object: 'Ticket',
-          o_id: Ticket.last.id
-        )
-      end
-    end
-
-    context 'follow up' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail090.box') }
-      let(:ticket)    { create(:ticket) }
-      let!(:external_sync) do
-        create(:external_sync,
-               source: 'ServiceNow-example@service-now.com',
-               source_id: 'INC678439',
-               object: 'Ticket',
-               o_id: ticket.id)
-      end
-
-      it 'adds Article to existing Ticket' do
-        expect { described_class.new.process({}, raw_mail) }.to(change { ticket.reload.articles.reload.count })
-      end
-
-      context 'key insensitive sender address' do
-        let(:raw_mail) { super().gsub('example@service-now.com', 'example@Service-Now.com') }
-
-        it 'adds Article to existing Ticket' do
-          expect { described_class.new.process({}, raw_mail) }.to(change { ticket.relaod.articles.reload.count })
+        it "doesn't set resizable preference" do
+          expect(attachment.filename).to eq('a.jpg')
+          expect(attachment.preferences).not_to include('resizable' => true)
         end
       end
     end
-  end
 
-  describe 'Jira handling' do
-    context 'new Ticket' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail/mail103.box') }
+    describe 'ServiceNow handling' do
+      context 'new Ticket' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail089.box') }
 
-      it 'creates an ExternalSync reference' do
-        described_class.new.process({}, raw_mail)
+        it 'creates an ExternalSync reference' do
+          described_class.new.process({}, raw_mail)
 
-        expect(ExternalSync.last).to have_attributes(
-          source: 'Jira-example@jira.com',
-          source_id: 'SYS-422',
-          object: 'Ticket',
-          o_id: Ticket.last.id
-        )
-      end
-    end
-
-    context 'follow up' do
-      let(:mail_file) { Rails.root.join('test/data/mail/mail104.box') }
-      let(:ticket) { create(:ticket) }
-      let!(:externel_sync) do
-        create(:external_sync,
-               source: 'Jira-example@jira.com',
-               source_id: 'SYS-422',
-               object: 'Ticket',
-               o_id: ticket.id)
+          expect(ExternalSync.last).to have_attributes(
+            source: 'ServiceNow-example@service-now.com',
+            source_id: 'INC678439',
+            object: 'Ticket',
+            o_id: Ticket.last.id
+          )
+        end
       end
 
-      it 'adds Article to existing Ticket' do
-        expect { described_class.new.process({}, raw_mail) }.to(change { ticket.reload.articles.reload.count })
-      end
-
-      context 'key insentitive sender address' do
-        let(:raw_mail) { super().gsub('example@service-now.com', 'Example@Service-Now.com') }
+      context 'follow up' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail090.box') }
+        let(:ticket)    { create(:ticket) }
+        let!(:external_sync) do
+          create(:external_sync,
+                 source: 'ServiceNow-example@service-now.com',
+                 source_id: 'INC678439',
+                 object: 'Ticket',
+                 o_id: ticket.id)
+        end
 
         it 'adds Article to existing Ticket' do
           expect { described_class.new.process({}, raw_mail) }.to(change { ticket.reload.articles.reload.count })
         end
+
+        context 'key insensitive sender address' do
+          let(:raw_mail) { super().gsub('example@service-now.com', 'Example@Service-Now.com') }
+
+          it 'adds Article to existing Ticket' do
+            expect { described_class.new.process({}, raw_mail) }.to(change { ticket.reload.articles.reload.count })
+          end
+        end
+      end
+    end
+
+    describe 'Jira handling' do
+      context 'new Ticket' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail103.box') }
+
+        it 'creates an ExternalSync reference' do
+          described_class.new.process({}, raw_mail)
+
+          expect(ExternalSync.last).to have_attributes(
+            source: 'Jira-example@jira.com',
+            source_id: 'SYS-422',
+            object: 'Ticket',
+            o_id: Ticket.last.id
+          )
+        end
+      end
+
+      context 'follow up' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail104.box') }
+        let(:ticket) { create(:ticket) }
+        let!(:external_sync) do
+          create(:external_sync,
+                 source: 'Jira-example@jira.com',
+                 source_id: 'SYS-422',
+                 object: 'Ticket',
+                 o_id: ticket.id)
+        end
+
+        it 'adds Article to existing Ticket' do
+          expect { described_class.new.process({}, raw_mail) }.to(change { ticket.reload.articles.reload.count })
+        end
+
+        context 'key insensitive sender address' do
+          let(:raw_mail) { super().gsub('example@service-now.com', 'Example@Service-Now.com') }
+
+          it 'adds Article to existing Ticket' do
+            expect { described_class.new.process({}, raw_mail) }.to(change { ticket.reload.articles.reload.count })
+          end
+        end
+      end
+    end
+
+    describe 'XSS protection' do
+      before do
+        # XSS processing may run into a timeout on slow CI systems, so turn the timeout off for the test.
+        stub_const("#{HtmlSanitizer}::PROCESSING_TIMEOUT", nil)
+      end
+
+      let(:article) { described_class.new.process({}, raw_mail).second }
+
+      let(:raw_mail) { <<~RAW.chomp }
+        From: ME Bob <me@example.com>
+        To: customer@example.com
+        Subject: some subject
+        Content-Type: #{content_type}
+        MIME-Version: 1.0
+
+        no HTML <script type="text/javascript">alert('XSS')</script>
+      RAW
+
+      context 'for Content-Type: text/html' do
+        let(:content_type) { 'text/html' }
+
+        it 'removes injected <script> tags from body' do
+          expect(article.body).to eq('no HTML')
+        end
+      end
+
+      context 'for Content-Type: text/plain' do
+        let(:content_type) { 'text/plain' }
+
+        it 'leaves body as-is' do
+          expect(article.body).to eq(<<~SANITIZED.chomp)
+            no HTML <script type="text/javascript">alert('XSS')</script>
+          SANITIZED
+        end
+      end
+    end
+
+    context 'for “delivery failed” notifications (a.k.a. bounce messages)' do
+      let(:ticket)     { article.ticket }
+      let(:article)    { create(:ticket_article, sender_name: 'Agent', message_id:) }
+      let(:message_id) { raw_mail[/(?<=^(References|Message-ID): )\S*/] }
+
+      context 'with future retries (delayed)' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail078.box') }
+
+        context 'on a closed ticket' do
+          before { ticket.update(state: Ticket::State.find_by(name: 'closed')) }
+
+          it 'sets #preferences on resulting ticket to { "send-auto-responses" => false, "is-auto-reponse" => true }' do
+            article = described_class.new.process({}, raw_mail).second
+            expect(article.preferences)
+              .to include('send-auto-response' => false, 'is-auto-response' => true)
+          end
+
+          it 'returns a Mail object with an x-zammad-out-of-office header' do
+            output_mail = described_class.new.process({}, raw_mail).last
+            expect(output_mail).to include('x-zammad-out-of-office': true)
+          end
+
+          it 'finds the article referenced in the bounce message headers, then adds the bounce message to its ticket' do
+            expect { described_class.new.process({}, raw_mail) }
+              .to change { ticket.articles.reload.count }.by(1)
+          end
+
+          it 'does not re-open the ticket' do
+            expect { described_class.new.process({}, raw_mail) }
+              .not_to change { ticket.reload.state.name }.from('closed')
+          end
+        end
+      end
+
+      context 'with no future retries (undeliverable): sample input 1' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail033-undelivered-mail-returned-to-sender.box') }
+
+        context 'for original message sent by Agent' do
+          it 'sets #preferences on resulting ticket to { "send-auto-responses" => false, "is-auto-reponse" => true }' do
+            article = described_class.new.process({}, raw_mail).second
+            expect(article.preferences)
+              .to include('send-auto-response' => false, 'is-auto-response' => true)
+          end
+
+          it 'finds the article referenced in the bounce message headers, then adds the bounce message to its ticket' do
+            expect { described_class.new.process({}, raw_mail) }
+              .to change { ticket.articles.reload.count }.by(1)
+          end
+
+          it 'does not alter the ticket state' do
+            expect { described_class.new.process({}, raw_mail) }
+              .not_to change { ticket.reload.state.name }.from('open')
+          end
+        end
+
+        context 'for original message sent by Customer' do
+          let(:article) { create(:ticket_article, sender_name: 'Customer', message_id:) }
+
+          it 'sets #preferences on resulting ticket to { "send-auto-responses" => false, "is-auto-reponse" => true }' do
+            article = described_class.new.process({}, raw_mail).second
+            expect(article.preferences)
+              .to include('send-auto-response' => false, 'is-auto-response' => true)
+          end
+
+          it 'finds the article referenced in the bounce message headers, then adds the bounce message to its ticket' do
+            expect { described_class.new.process({}, raw_mail) }
+              .to change { ticket.articles.reload.count }.by(1)
+          end
+
+          it 'does not alter the ticket state' do
+            expect { described_class.new.process({}, raw_mail) }
+              .not_to change { ticket.reload.state.name }.from('new')
+          end
+        end
+      end
+
+      context 'with no future retries (undeliverable): sample input 2' do
+        let(:mail_file) { Rails.root.join('test/data/mail/mail055.box') }
+
+        it 'finds the article referenced in the bounce message headers, then adds the bounce message to its ticket' do
+          expect { described_class.new.process({}, raw_mail) }
+            .to change { ticket.articles.reload.count }.by(1)
+        end
+
+        it 'does not alter the ticket state' do
+          expect { described_class.new.process({}, raw_mail) }
+            .not_to change { ticket.reload.state.name }.from('open')
+        end
+      end
+    end
+
+    context 'for “out-of-office” notifications (a.k.a. auto-response messages)' do
+      let(:raw_mail) { <<~RAW.chomp }
+        From: me@example.com
+        To: customer@example.com
+        Subject: #{subject_line}
+
+        Some Text
+      RAW
+      let(:subject_line) { 'Lorem ipsum dolor' }
+
+      it 'applies the OutOfOfficeCheck filter to given message' do
+        expect(Channel::Filter::OutOfOfficeCheck)
+          .to receive(:run)
+          .with(kind_of(Hash), hash_including(subject: subject_line), kind_of(Hash))
+
+        described_class.new.process({}, raw_mail)
+      end
+
+      context 'on an existing, closed ticket' do
+        let(:ticket) { create(:ticket, state_name: 'closed') }
+        let(:subject_line) { ticket.subject_build('Lorem ipsum dolor') }
+
+        context 'when OutOfOfficeCheck filter applies x-zammad-out-of-office: false' do
+          before do
+            allow(Channel::Filter::OutOfOfficeCheck)
+              .to receive(:run) { |_, mail_hash| mail_hash[:'x-zammad-out-of-office'] = false }
+          end
+
+          it 're-opens a closed ticket' do
+            expect { described_class.new.process({}, raw_mail) }
+              .to not_change(Ticket, :count)
+              .and change { ticket.reload.state.name }.to('open')
+          end
+        end
+
+        context 'when OutOfOfficeCheck filter applies x-zammad-out-of-office: true' do
+          before do
+            allow(Channel::Filter::OutOfOfficeCheck)
+              .to receive(:run) { |_, mail_hash| mail_hash[:'x-zammad-out-of-office'] = true }
+          end
+
+          it 'does not re-open a closed ticket' do
+            expect { described_class.new.process({}, raw_mail) }
+              .to not_change(Ticket, :count)
+              .and(not_change { ticket.reload.state.name })
+          end
+        end
+      end
+    end
+
+    describe 'suppressing normal Ticket::Article callbacks' do
+      context 'from sender: "Agent"' do
+        let(:agent) { create(:agent) }
+
+        it 'does not dispatch an email on article creation' do
+          expect(TicketArticleCommunicateEmailJob).not_to receive(:perform_later)
+
+          described_class.new.process({}, <<~RAW.chomp)
+            From: #{agent.email}
+            To: customer@example.com
+            Subject: some subject
+
+            Some Text
+          RAW
+        end
+      end
+    end
+
+    context 'when an unprocessable mail is received' do
+      let(:parser) { described_class.new }
+      let(:mail)   { attributes_for(:failed_email)[:data] }
+
+      before do
+        allow(parser).to receive(:_process).and_raise(Timeout::Error)
+      end
+
+      it 'saves the unprocessable email' do
+        begin
+          parser.process({}, mail)
+        rescue RuntimeError
+          # expected
+        end
+
+        expect(FailedEmail).to be_exist
       end
     end
   end
 
-  describe 'XSS protection' do
-    before do
-      # XSS processing may run into a timeout on slow CI systems, so turn the timeout off for the test.
-      stub_cont("#{HtmlSanitizer}::PROCESSING_TIMEOUT", nil)
+  describe '#compose_postmaster_reply' do
+    let(:raw_incoming_mail) { Rails.root.join('test/data/mail/mail010.box').read }
+
+    shared_examples 'postmaster reply' do
+      it 'composes postmaster reply' do
+        reply = described_class.new.send(:compose_postmaster_reply, raw_incoming_mail, locale)
+        expect(reply[:to]).to eq('smith@example.com')
+        expect(reply[:content_type]).to eq('text/plain')
+        expect(reply[:subject]).to eq(expected_subject)
+        expect(reply[:body]).to eq(expected_body)
+      end
     end
 
-    let(:article) { described_class.nw.process({}, raw_mail).second }
+    context 'for English locale (en)' do
+      include_examples 'postmaster reply' do
+        let(:locale)           { 'en' }
+        let(:expected_subject) { '[undeliverable] Message too large' }
+        let(:expected_body) do
+          body = <<~BODY
+            Dear Smith Sepp,
 
-    let(:raw_mail) { <<~RAW.chomp }
-      From: ME Bob <me@example.com>
-      To: customer@example.com
-      Subject: some subject
-      Content-Type: #{content_type}
-      MIME-Version: 1.0
+            Unfortunately your email titled "Gruß aus Oberalteich" could not be delivered to one or more recipients.
 
-      no HTML <script type="text/javascript">alert('XSS')</script>
+            Your message was 0.01 MB but we only accept messages up to 10 MB.
+
+            Please reduce the message size and try again. Thank you for your understanding.
+
+            Regretfully,
+
+            Postmaster of zammad.example.com
+          BODY
+          body.gsub(/\n/, "\r\n")
+        end
+      end
+    end
+
+    context 'for German locale (de)' do
+      include_examples 'postmaster reply' do
+        let(:locale) { 'de' }
+        let(:expected_subject) { '[Unzustellbar] Nachricht zu groß' }
+        let(:expected_body) do
+          body = <<~BODY
+            Hallo Smith Sepp,
+
+            Ihre E-Mail mit dem Betreff "Gruß aus Oberalteich" konnte leider nicht an einen oder mehrere Empfänger zugestellt werden.
+
+            Die Nachricht hatte eine Größe von 0.01 MB, wir akzeptieren jedoch nur E-Mails mit einer Größe von bis zu 10 MB.
+
+            Bitte reduzieren Sie die Größe Ihrer Nachricht und versuchen Sie es erneut. Vielen Dank für Ihr Verständnis.
+
+            Mit freundlichen Grüßen
+
+            Postmaster von zammad.example.com
+          BODY
+          body.gsub(/\n/, "\r\n")
+        end
+      end
+    end
+  end
+
+  describe '#mail_to_group' do
+    context 'when EmailAddress exists' do
+      context 'when gives address matches exactly' do
+        let(:group) { create(:group) }
+        let(:channel)        { create(:email_channel, group:) }
+        let!(:email_address) { create(:email_address, channel:) }
+
+        it 'returns the Channel Group' do
+          expect(described_class.mail_to_group(email_address.email)).to eq(group)
+        end
+      end
+
+      context 'when gives address matches key insensitive' do
+        let(:group) { create(:group) }
+        let(:channel)        { create(:email_channel, group:) }
+        let(:address)        { 'KeyInsensitive@example.COM' }
+        let!(:email_address) { create(:email_address, email: address, channel:) }
+
+        it 'returns the Channel Group' do
+          expect(described_class.mail_to_group(address)).to eq(group)
+        end
+      end
+
+      context 'when no Channel is assigned' do
+        let!(:email_address) { create(:email_address, channel: nil) }
+
+        it 'returns nil' do
+          expect(described_class.mail_to_group(email_address.email)).to be_nil
+        end
+      end
+
+      context 'when Channel has no Group assigned' do
+        let(:channel)        { create(:email_channel, group: nil) }
+        let!(:email_address) { create(:email_address, channel:) }
+
+        it 'returns nil' do
+          expect(described_class.mail_to_group(email_address.email)).to be_nil
+        end
+      end
+    end
+
+    context 'when given address is not parse-able' do
+      let(:address) { 'this_is_not_a_valid_email_address' }
+
+      it 'returns nil' do
+        expect(described_class.mail_to_group(address)).to be_nil
+      end
+    end
+  end
+
+  describe 'Updating group settings causes huge numbers of delayed jobs #4306', searchindex: true do
+    let(:new_email) { <<~RAW.chomp }
+      From: Max Smith <customer@example.com>
+      To: myzammad@example.com
+      Subject: test sender name update 2
+
+      Some Text
     RAW
 
-    context 'for Content-Type: text/html' do
-      let(:content_type) { 'text/html' }
-
-      it 'removes injected <script> tags from body' do
-        expect(article.body).to eq('no HTML')
+    it 'does create search index jobs for new email tickets' do
+      ticket, = described_class.new.process({}, new_email)
+      job = Delayed::Job.all.detect do |row|
+        YAML.load(row.handler,
+                  permitted_classes: [ActiveJob::QueueAdapters::DelayedJobAdapter::JobWrapper]).job_data['arguments'] == ['Ticket',
+                                                                                                                          ticket.id]
       end
+      expect(job).to be_present
     end
+  end
 
-    context 'for Content-Type: text/plain' do
-      let(:context_type) { 'text/plain' }
+  # https://github.com/zammad/zammad/issues/5227
+  describe 'decodes and trims base64/encoded email subject' do
+    context 'for a subject with encoded whitespace' do
+      let(:raw_mail) { <<~RAW.chomp }
+        From: sender@example.com
+        To: recipient@example.com
+        Subject: =?UTF-8?B?ICAgICAgVGVzdCBFbWFpbCBTdWJqZWN0ICAg?=
 
-      it 'leaves body as-is' do
-        expect(article.body).to eq(<<~SANITIZED.chomp)
-          no HTML <script type="text/javascript">alert('XSS')</script>
-        SANITIZED
+        Body text
+      RAW
+
+      let(:parsed)           { described_class.new.parse(raw_mail) }
+      let(:expected_subject) { 'Test Email Subject' }
+
+      it 'decodes and trims the subject correctly' do
+        expect(parsed[:subject]).to eq(expected_subject)
       end
     end
   end
-  # parei 1647
 end
