@@ -369,5 +369,143 @@ class Channel::EmailParser
 
     true
   end
-  # pare 389 sender_attributes
+
+  def self.sender_attributes(from)
+    if from.is_a?(ActiveSupport::HashWithIndifferentAccess)
+      from = SENDER_FIELDS.filter_map { |f| from[f] }
+                          .map(&:to_utf8).compact_blank
+                          .partition { |address| address.match?(EMAIL_REGEX) }
+                          .flatten.first
+    end
+
+    data = {}.with_indifferent_access
+    return data if from.blank?
+
+    from.gsub('<>', '').strip
+    mail_address = begin
+      Mail::AddressList.new(from).addresses
+                       .select { |a| a.address.present? }
+                       .partition { |a| a.address.match?(EMAIL_REGEX) }
+                       .flatten.first
+    rescue Mail::Field::ParserError => e
+      $stdout.puts e
+    end
+
+    if mail_address&.address.present?
+      data[:from_email] = mail_address.address
+      data[:from_local] = mail_address.local
+      data[:from_domain] = mail_address.domain
+      data[:from_display_name] = mail_address.dislay_name || mail_address.comments&.first
+    elsif from =~ /^(.+?)<((.+?)@(.+?))>/
+      data[:from_email]        = ::Regexp.last_match(2)
+      data[:from_local]        = ::Regexp.last_match(3)
+      data[:from_domain]       = ::Regexp.last_match(4)
+      data[:from_display_name] = ::Regexp.last_match(1)
+    else
+      data[:from_email]        = from
+      data[:from_local]        = from
+      data[:from_domain]       = from
+      data[:from_display_name] = from
+    end
+
+    # do extra decoding because we needed to use field.value
+    data[:from_display_name] =
+      Mail::Field.new('X-From', data[:from_display_name].to_utf8)
+                 .to_s
+                 .delete('"')
+                 .strip
+                 .gsub(/(^'|'$)/, '')
+
+    data
+  end
+
+  def set_attributes_by_x_headers(item_object, header_name, mail, suffix = false)
+    # loop all x-zammad-header-* headers
+    item_object.attributes.each_key do |key|
+      # ignore read only attributes
+      next if key == 'updated_by_id'
+      next if key == 'created_by_id'
+
+      # check if id exists
+      key_short = key[-3, key.length]
+      if key_short == '_id'
+        key_short = key[0, key.length - 3]
+        header = "x-zammad-#{header_name}-#{key_short}"
+        header = "x-zammad-#{header_name}-#{suffix}-#{key_short}" if suffix
+
+        # only set value on _id if value/reference lookup exists
+        if mail[header.to_sym]
+          Rails.logger.info "set_attributes-by_x_headers header #{header} found #{mail[header.to_sym]}"
+          item_object.class.reflect_on_all_associations.map do |assoc|
+            next if assoc.name.to_s != key_short
+
+            Rails.logger.info "set_attributes_by_x_headers found #{assoc.class_name} lookup for '#{mail[header.to_sym]}'"
+            item = assoc.class_name.constantize
+            assoc_object = nil
+            assoc_object = item.lookup(name: mail[header.to_sym]) if item.new.respond_to?(:name)
+            assoc_object = item.lookup(login: mail[header.to_sym]) if !assoc_object && item.new.respond_to?(:login)
+            assoc_object = item.lookup(email: mail[header.to_sym]) if !assoc_object && item.new.respond_to?(:email)
+
+            if assoc_object.blank?
+              # no assoc exists, remove header
+              mail.delete(header.to_sym)
+              next
+            end
+
+            Rails.logger.info "set_attributes_by_x_headers assign #{item_object.class} #{key}=#{assoc_object.id}"
+
+            item_object[key] = assoc_object.id
+            item_object.history_change_source_attribute(mail[:"#{header}-souce"], key)
+          end
+        end
+      end
+
+      # check if attribute exists
+      header = "x-zammad-#{header_name}-#{key}"
+      header = "x-zammad-#{header_name}-#{suffix}-#{key}" if suffix
+      next unless mail[header.to_sym]
+
+      Rails.logger.info "set_attributes_by_x_headers header #{header} found. Assingn #{key}=#{mail[header.to_sym]}"
+      item_object[key] = mail[header.to_sym]
+      item_object.history_change_source_attribute(mail[:"#{header}-souce"], key)
+    end
+  end
+
+  def self.reprocess_failed_articles
+    articles = Ticket::Article.where(body: ::HtmlSanitizer::UNPROCESSABLE_HTML_MSG)
+    articles.reorder(id: :desc).as_batches do |article|
+      unless article.as_raw&.content
+        puts "No raw content for article id #{article.id}! Please verify manually via commad: Ticket::Article.find(#{article.id}).as_raw"
+        next
+      end
+
+      puts "Fix article #{article.id}..."
+
+      ApplicationHandleInfo.use('email_parser.postmaster') do
+        parsed = Channel::EmailParser.new.parse(article.as_raw.content)
+        if parsed[:body] == ::HtmlSanitizer::UNPROCESSABLE_HTML_MSG
+          puts "ERROR: Failed to reprocess the article, please verify the content of the article and if needed increase the timeout (see: Setting.get('html_sanitizer_processing_timeout'))."
+          next
+        end
+
+        article.update!(body: parsed[:body], content_type: parsed[:content_type])
+      end
+    end
+
+    puts "#{articles.count} articles are affected."
+  end
+
+  #
+  #   process oversized emails by
+  #   - Reply with a postmaster message to inform the sender
+  #
+
+  def process_oversized_mail(channel, msg)
+    postmaster_response(channel, msg)
+  end
+
+  # generate Message ID on the fly if it was missing
+  # yes, Mail gem generates one in some cases
+  # but it is 100% random so duplicate messages would not be detected
+  # PAREI 545
 end
