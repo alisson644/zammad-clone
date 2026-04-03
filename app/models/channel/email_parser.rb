@@ -507,5 +507,70 @@ class Channel::EmailParser
   # generate Message ID on the fly if it was missing
   # yes, Mail gem generates one in some cases
   # but it is 100% random so duplicate messages would not be detected
-  # PAREI 545
+  def message_ensure_message_id(raw, parsed)
+    field = parsed.header.fields.find { |elem| elem.name == 'Message-ID' }
+
+    return true if field&.unparsed_value.present?
+
+    parsed.message_id = generate_message_id(raw, parsed.from)
+  end
+
+  # Auto reply as the postmaster to oversized emails with:
+  # [undeliverable] Message too large
+  def postmaster_response(channel, msg)
+    begin
+      reply_mail = compose_postmaster_reply(msg)
+    rescue NotificationFactory::FileNotFoundError => e
+      Rails.logger.error "No valid postmaster email_oversized template found. Skipping postmaster reply. #{e.inspect}"
+      return
+    end
+    Rails.logger.info "Send mail too large postmaster message to: #{reply_mail[:to]}"
+    email_address = EmailAddress.find_by(channel:)
+    reply_mail[:from] = Channel::EmailBuild.recipient_line(email_address.name, email_address.email)
+    channel.deliver(reply_mail)
+  rescue StandardError => e
+    Rails.logger.error "Error during sending of postmaster oversized email auto-reply: #{e.inspect}\n#{e.backtrace}"
+  end
+
+  # compose a "message too large"
+  def compose_postmaster_reply(raw_incoming_mail, locale = nil)
+    parsed_incoming_mail = Channel::EmailParser.new.parse(raw_incoming_mail)
+
+    # construct a dummy mail object
+    mail = MESSAGE_STRUCT.new
+    mail.from_display_name = parsed_incoming_mail[:from_display_name]
+    mail.subject = parsed_incoming_mail[:subject]
+    mail.msg_size = format('%<MB>.2f', MB: raw_incoming_mail.size.to_f / 1024 / 1024)
+
+    reply = NotificationFactory::Mailer.template(
+      template: 'email_oversized',
+      locale:,
+      format: 'txt',
+      objects: {
+        mail:
+      },
+      raw: true, # will not add application template
+      standalone: true # default: false - will send header & footer
+    )
+
+    reply.merge(
+      to: parsed_incoming_mail[:from_email],
+      body: reply[:body].gsub(/\n/, "\r\n"),
+      content_type: 'text/plain',
+      References: parsed_incoming_mail[:message_id],
+      'In-Reply-To': parsed_incoming_mail[:message_id]
+    )
+  end
+
+  def guess_email_fqdn(from)
+    Mail::Address.new(from).domain.strip
+  rescue StandardError
+    nil
+  end
+
+  def generate_message_id(raw_message, from)
+    fqdn = guess_email_fqdn(from) || 'zammad_generated'
+
+    "<gen-#{Digest::MD5.hexdigest(raw_message)}@#{fqdn}>"
+  end
 end
