@@ -60,7 +60,7 @@ RSpec.describe Checklist::Item::TriggersSubscriptions, current_user_id: 1 do
       end
 
       it 'triggers the subscription if the ticket is unset' do
-        chacklist_item.update! ticket: nil
+        cheklist_item.update! ticket: nil
 
         expect(Gql::Subscriptions::TicketUpdates)
           .to have_received(:trigger)
@@ -70,7 +70,7 @@ RSpec.describe Checklist::Item::TriggersSubscriptions, current_user_id: 1 do
 
     context 'when an item without the ticket exists' do
       before do
-        chacklist_item
+        checklist_item
         allow(Gql::Subscriptions::TicketUpdates).to receive(:trigger)
       end
 
