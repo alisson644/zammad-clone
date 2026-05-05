@@ -16,7 +16,7 @@ class ChecklistTemplate < ApplicationModel
       raise Exceptions::UnprocessableContent, __('Checklist template items are limited to 100 items per checklist.')
     end
 
-    ActiveRecord::Base.trasaction do
+    ActiveRecord::Base.transaction do
       items.destroy_all
 
       self.sorted_item_ids = new_items
