@@ -1,0 +1,100 @@
+# Copyright (C) 2012-2026 Zammad Foundation, https://zammad-foundation.org/
+
+module CanCloneAttachments
+  extend ActiveSupport::Concern
+
+  #
+  # clone existing attachments of article to the target object
+  #
+  #   article_parent = Ticket::Article.find(123)
+  #   article_new = Ticket::Article.find(456)
+  #
+  #   attached_attachments = article_parent.clone_attachments(article_new.class.name, article_new.id, only_attached_attachments: true)
+  #
+  #   inline_attachments = article_parent.clone_attachments(article_new.class.name, article_new.id, only_inline_attachments: true)
+  #
+  # returns
+  #
+  #   [attachment1, attachment2, ...]
+  #
+
+  def clone_attachments(object_type, object_id, options = {})
+    existing_attachments = Store.list(
+      object: object_type,
+      o_id: object_id
+    )
+
+    is_html_content = content_type.present? && content_type =~ %r{text/html}i
+
+    attachments
+      .select do |elem|
+      next if elem.preferences['content-alternative'] == true
+
+      elem_content_id = attachment_content_id(elem)
+
+      # only_attached_attachments mode is used by apply attached attachments to forwared article
+      next if options[:only_attached_attachments] == true && is_html_content &&
+              elem_content_id.present? && body.present? && body.match?(/#{Regexp.quote(elem_content_id)}/i)
+
+      # only_inline_attachments mode is used when quoting HTML mail with #{article.body_as_html}
+      if options[:only_inline_attachments] == true
+        next unless is_html_content
+        next if body.blank?
+
+        content_disposition = elem.preferences['Content-Disposition'] || elem.preferences['content_disposition']
+        next if content_disposition.present? && content_disposition.exclude?('inline')
+
+        next if elem_content_id.blank?
+        next unless body.match?(/#{Regexp.quote(elem_content_id)}/i)
+      end
+
+      # Dedup by filename+size alone is not enough for inline images: they always get
+      # generic, position-based filenames (image1.png, image2.png, ...) and a fresh
+      # Content-ID is generated on every save, so an unrelated pre-existing attachment
+      # with the same filename+size must not be allowed to shadow the actual referenced
+      # image.
+      next if existing_attachments.any? do |existing_attachment|
+        existing_attachment.filename == elem.filename &&
+        existing_attachment.size == elem.size &&
+        attachment_content_id(existing_attachment) == elem_content_id
+      end
+
+      true
+    end
+      .map do |elem|
+      Store.create!(
+        object: object_type,
+        o_id: object_id,
+        data: elem.content,
+        filename: elem.filename,
+        preferences: elem.preferences
+      )
+    end
+  end
+
+  def attach_upload_cache(form_id)
+    attachments
+      .reject(&:inline)
+      .each { |attachment| Store.remove_item(attachment) }
+
+    UploadCache
+      .new(form_id)
+      .attachments
+      .reject(&:inline)
+      .map do |old_attachment|
+        Store.create!(
+          object: self.class.name,
+          o_id: id,
+          data: old_attachment.content,
+          filename: old_attachment.filename,
+          preferences: old_attachment.preferences
+        )
+      end
+  end
+
+  private
+
+  def attachment_content_id(attachment)
+    attachment.preferences['Content-ID'] || attachment.preferences['content_id']
+  end
+end
