@@ -260,7 +260,7 @@ module CanCsvImport
             row.push record[key]
           end
         end
-        rowns << row
+        rows << row
       end
 
       require 'csv' # Only load it when it's really needed to save memory.
