@@ -1,0 +1,292 @@
+# Copyright (C) 2012-2026 Zammad Foundation, https://zammad-foundation.org/
+
+module CanSearch
+  extend ActiveSupport::Concern
+
+  #
+  # This function provides the possibility to add model specific sql extensions
+  # for the searches in the DB. E.g. role or group specific conditions
+  # in user model.
+  #
+  # see e.g. also app/models/user/search.rb
+  #
+
+  scope :search_sql_exptension, ->(_params) {}
+
+  #
+  # This function defines the sql search query for the text fields which are searched in. By default
+  # it is all string columns but can be modified.
+  #
+  # see e.g. also app/models/ticket/search.rb
+  #
+
+  scope :search_sql_query_extension, lambda { |params|
+    query = params[:query]&.delete('*')
+    return if query.blank?
+
+    search_columns = columns.select { |row| row.type == :string && !row.try(:array) }.map(&:name)
+    return if search_columns.blank?
+
+    where_or_cis(search_columns, "%#{SqlHelper.quote_like(query.to_s.downcase)}%")
+  }
+
+  # Scope to specific IDs if they're given in params.
+  # Usually those IDs are pre-filled in .search_params_pre method.
+  scope :search_sql_ids, lambda { |params|
+                           where(id: params[:ids]) if params[:ids].present?
+                         }
+
+  class_methods do
+    #
+    # This defines the default search sort by for the search function.
+    #
+
+    def search_default_sort_by
+      'updated_at'
+    end
+
+    #
+    # This defines the default search order by for the search function.
+    #
+
+    def search_default_order_by
+      'desc'
+    end
+
+    #
+    # This function can be used to fix parameters for the model
+    # e.g. is used to restrict the result set of organization searches
+    # to only return customer organizations in case of a customer user
+    #
+    # see e.g. also app/models/organization/search.rb
+    #
+
+    def search_params_pre(params)
+      # optional
+    end
+
+    #
+    # This function provides the possibility to add model specific query extensions
+    # for the searches in the elasticsearch. E.g. role or group specific conditions
+    # in user model.
+    #
+    # see e.g. also app/models/user/search.rb
+    #
+
+    def search_query_extension(params)
+      # optional
+    end
+
+    #
+    # search objects via search index
+    #
+    #   result = Model.search(
+    #     current_user: User.find(123),
+    #     query:        'search something',
+    #     limit:        15,
+    #     offset:       100,
+    #   )
+    #
+    # returns
+    #
+    #   result = [obj1, obj2, obj3]
+    #
+    # search objects via search index with total count
+    #
+    #   result = Model.search(
+    #     current_user: User.find(123),
+    #     query:            'search something',
+    #     limit:            15,
+    #     offset:           100,
+    #     with_total_count: true
+    #   )
+    #
+    # returns
+    #
+    #   result = {
+    #     object_ids: [1,2,3],
+    #     count: 3,
+    #   }
+    #
+    # search objects via search index with ONLY total count
+    #
+    #   result = Model.search(
+    #     current_user: User.find(123),
+    #     query:            'search something',
+    #     limit:            15,
+    #     offset:           100,
+    #     only_total_count: true
+    #   )
+    #
+    # returns
+    #
+    #   result = {
+    #     count: 3,
+    #   }
+    #
+    # search objects via search index
+    #
+    #   result = Model.search(
+    #     current_user: User.find(123),
+    #     query:        'search something',
+    #     limit:        15,
+    #     offset:       100,
+    #     full:         false,
+    #   )
+    #
+    # returns
+    #
+    #   result = [1,2,3]
+    #
+    # search objects via database
+    #
+    #   result = Group.search(
+    #     current_user: User.find(123),
+    #     query: 'some query', # query or condition is required
+    #     condition: {
+    #       'groups.id' => {
+    #         operator: 'is',
+    #         value: [1,2,3],
+    #       },
+    #     },
+    #     limit: 15,
+    #     offset: 100,
+    #
+    #     # sort single column
+    #     sort_by: 'created_at',
+    #     order_by: 'asc',
+    #
+    #     # sort multiple columns
+    #     sort_by: [ 'created_at', 'updated_at' ],
+    #     order_by: [ 'asc', 'desc' ],
+    #
+    #     full: false,
+    #   )
+    #
+    # returns
+    #
+    #   result = [1,2,3]
+    #
+
+    def search(params)
+      # It's possible to search objects that don't have .search_preferences method.
+      # However, if .search_preferences exist and return falsey value, search is not authorized in a given context!
+      # Thus we need to check if method exist instead of using try()!
+      return if defined?(search_preferences) && !search_preferences(params[:current_user])
+
+      params = search_build_params(params)
+
+      # try search index backend
+      # we only search in elastic search when we have a query present or if search_by_index is explicitly set to true
+      # else we try to use the database result, since it is more up to date
+      object_ids, object_count = if SearchIndexBackend.enabled? && include?(HasSearchIndexBackend) && (params[:query]&.delete('*').present? || params[:search_by_index].present?)
+                                   search_es(params)
+                                 else
+                                   search_sql(params)
+                                 end
+
+      search_result(params, object_ids, object_count)
+    end
+
+    def search_result(params, object_ids, object_count)
+      if params[:only_total_count].present?
+        {
+          total_count: object_count
+        }
+      elsif params[:with_total_count].present?
+        if params[:full].present?
+          return {
+            objects: where_ordered_ids(object_ids),
+            total_count: object_count
+          }
+        end
+
+        {
+          object_ids:,
+          total_count: object_count
+        }
+      elsif params[:full].present?
+        where_ordered_ids(object_ids)
+      else
+        object_ids
+      end
+    end
+
+    def search_build_params(params)
+      search_params_pre(params)
+
+      sql_helper = ::SqlHelper.new(object: self)
+
+      params[:condition] ||= {}
+      params[:limit] ||= 50
+      params[:offset] = params[:offset].presence || params[:from].presence || 0
+      params[:full] = !params.key?(:full) || ActiveModel::Type::Boolean.new.cast(params[:full])
+      params[:search_by_index] = ActiveModel::Type::Boolean.new.cast(params[:search_by_index])
+      params[:sort_by] = sql_helper.get_sort_by(params, search_default_sort_by)
+      params[:order_by] = sql_helper.get_order_by(params, search_default_order_by)
+
+      params
+    end
+
+    def search_es(params)
+      result = SearchIndex_backend.search_by_index(
+        params[:query],
+        to_s,
+        params.merge(query_extension: search_query_extension(params), with_total_count: true)
+      )
+
+      object_ids = result&.dig(:object_metadata)&.pluck(:id) || [] if params[:only_total_count].blank?
+
+      object_count = result&.dig(:total_count) || 0
+
+      [object_ids, object_count]
+    end
+
+    def search_sql(params)
+      scope = search_sql_base(params)
+
+      object_order_sql = sql_helper.get_order(params[:sort_by], params[:order_by], "#{table_name}.updated_at DESC")
+
+      objects_scope = scope
+                      .reorder(Arel.sql(object_order_sql))
+                      .offset(params[:offset])
+                      .limit(params[:limit])
+                      .group(:id)
+
+      object_ids = objects_scope.pluck(:id) if params[:only_total_count].blank?
+
+      object_count = scope.count("DISTINCT #{table_name}.id")
+
+      [object_ids, object_count]
+    end
+
+    def search_sql_base(params)
+      query_condition, bind_condition, tables = selector2sql(params[:condition])
+
+      scope = params[:scope].present? ? params[:scope].new(params[:current_user]).resolve : all
+
+      scope
+        .joins(tables).where(query_condition, *bind_condition)
+        .search_sql_exptension(params)
+        .search_sql_query_extension(params)
+        .search_sql_ids(params)
+    end
+
+    def sql_helper
+      @sql_helper ||= ::SqlHelper.new(object: self)
+    end
+
+    #
+    # Returns a relation with objects referenced by the ids in their original order.
+    #
+    def where_ordered_ids(ids)
+      # Casting to bigint is required for PostgreSQL 13 only.
+      # Newer versions figure out types automatically.
+      # This can be removed once PostgreSQL 13 support is dropped.
+      # https://github.com/zammad/zammad/issues/5927
+      order_by = "array_position(ARRAY[#{ids.join(',')}]::bigint[], id::bigint)"
+
+      where(id: ids).reorder(Arel.sql(order_by))
+    end
+  end
+end
